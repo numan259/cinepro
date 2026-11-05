@@ -54,6 +54,36 @@ integrations. It does not include a catalog database, user accounts, or
 server-side user library storage. The provider modules are independent
 integrations and may stop working when an external service changes.
 
+## Recommended frontend: Niho
+
+For a complete user experience, pair CinePro Core with the
+[Niho frontend](https://github.com/numan259/niho). Niho is the client
+application that provides the user interface for browsing titles, viewing
+details, selecting episodes, and starting playback through Core.
+
+CinePro Core and Niho have separate responsibilities:
+
+- **CinePro Core** handles TMDB metadata, provider discovery, source
+  resolution, and browser-compatible HLS streaming.
+- **Niho** provides the web and Android user interface that people use to
+  search, browse, and watch content.
+
+Core can be used by other clients, but Niho is important because it connects
+the backend capabilities to an accessible, consistent viewing experience.
+Using both projects also keeps the backend and frontend concerns separate, so
+developers can self-host, customize, or replace either component independently.
+
+To connect Niho to a local Core server, configure the frontend's
+`VITE_CINEPRO_URL` value in its local `.env` file. For example:
+
+```text
+VITE_CINEPRO_URL=http://localhost:3000
+```
+
+When Core runs on another trusted device, use that device's reachable address
+instead. See the [Niho repository](https://github.com/numan259/niho) for its
+frontend and Android setup instructions.
+
 ## Prerequisites
 
 - Node.js 20 or newer. Node.js 22 is recommended because it matches the
@@ -75,7 +105,7 @@ providers; no specific hardware minimum has been established.
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/cinepro-org/core.git
+git clone https://github.com/numan259/cinepro.git
 cd core
 npm ci
 ```
