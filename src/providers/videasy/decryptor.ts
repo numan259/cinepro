@@ -4,6 +4,7 @@
 // enc-dec.app handles the wasm/cryptojs decryption server-side.
 
 const DEC_API = 'https://enc-dec.app/api/dec-videasy';
+const REQUEST_TIMEOUT_MS = 15_000;
 
 // response shape from enc-dec.app
 interface DecApiResponse {
@@ -37,11 +38,18 @@ export async function decryptResponse(
     const key = blobKey(tmdbId, blob);
     if (cache.has(key)) return cache.get(key)!;
 
+    const controller = new AbortController();
+    const timeout = setTimeout(
+        () => controller.abort(),
+        REQUEST_TIMEOUT_MS
+    );
+
     try {
         const res = await fetch(DEC_API, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: blob, id: tmdbId })
+            body: JSON.stringify({ text: blob, id: tmdbId }),
+            signal: controller.signal
         });
 
         if (!res.ok) return null;
@@ -59,5 +67,7 @@ export async function decryptResponse(
         return payload;
     } catch {
         return null;
+    } finally {
+        clearTimeout(timeout);
     }
 }

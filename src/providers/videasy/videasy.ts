@@ -62,6 +62,7 @@ export class VideasyProvider extends BaseProvider {
     readonly id = 'Videasy';
     readonly name = 'Videasy';
     readonly enabled = true;
+    readonly REQUEST_TIMEOUT_MS = 15_000;
     readonly BASE_URL = 'https://api.videasy.net';
     readonly HEADERS = {
         'User-Agent':
@@ -137,49 +138,62 @@ export class VideasyProvider extends BaseProvider {
     ): Promise<ProviderResult | null> {
         const params = this.buildParams(server, media);
         const url = `${server.url}?${new URLSearchParams(params as Record<string, string>)}`;
-        const response = await fetch(url, { headers: this.HEADERS });
+        const controller = new AbortController();
+        const timeout = setTimeout(
+            () => controller.abort(),
+            this.REQUEST_TIMEOUT_MS
+        );
 
-        if (!response.ok) {
-            return this.emptyResult('invalid response', media);
+        try {
+            const response = await fetch(url, {
+                headers: this.HEADERS,
+                signal: controller.signal
+            });
+
+            if (!response.ok) {
+                return this.emptyResult('invalid response', media);
+            }
+
+            // api returns plain text hex blob, not json
+            const blob = await response.text();
+
+            if (!blob || blob.length < 10) {
+                return this.emptyResult('INVALID RESPONSE', media);
+            }
+
+            const decrypted = await decryptResponse(blob, String(media.tmdbId));
+
+            if (!decrypted || decrypted.sources.length === 0) {
+                return this.emptyResult('Unable to Decode', media);
+            }
+
+            const sources: ProviderResult['sources'] = decrypted.sources
+                .filter((s) => !!s?.url)
+                .map((s) => ({
+                    url: this.createProxyUrl(s.url, this.HEADERS),
+                    type: this.detectType(s.url, s.type),
+                    quality: this.normalizeQuality(s.quality),
+                    audioTracks: [
+                        {
+                            language: this.resolveLanguage(server),
+                            label: this.resolveLanguageLabel(server)
+                        }
+                    ],
+                    provider: { id: this.id, name: this.name }
+                }));
+
+            const subtitles: ProviderResult['subtitles'] = decrypted.subtitles
+                .filter((s) => !!s?.url)
+                .map((s) => ({
+                    url: this.createProxyUrl(s.url, {}),
+                    label: s.lang ?? s.language ?? 'Unknown',
+                    format: 'vtt' as const
+                }));
+
+            return { sources, subtitles, diagnostics: [] };
+        } finally {
+            clearTimeout(timeout);
         }
-
-        // api returns plain text hex blob, not json
-        const blob = await response.text();
-
-        if (!blob || blob.length < 10) {
-            return this.emptyResult('INVALID RESPONSE', media);
-        }
-
-        const decrypted = await decryptResponse(blob, String(media.tmdbId));
-
-        if (!decrypted || decrypted.sources.length === 0) {
-            return this.emptyResult('Unable to Decode', media);
-        }
-
-        const sources: ProviderResult['sources'] = decrypted.sources
-            .filter((s) => !!s?.url)
-            .map((s) => ({
-                url: this.createProxyUrl(s.url, this.HEADERS),
-                type: this.detectType(s.url, s.type),
-                quality: this.normalizeQuality(s.quality),
-                audioTracks: [
-                    {
-                        language: this.resolveLanguage(server),
-                        label: this.resolveLanguageLabel(server)
-                    }
-                ],
-                provider: { id: this.id, name: this.name }
-            }));
-
-        const subtitles: ProviderResult['subtitles'] = decrypted.subtitles
-            .filter((s) => !!s?.url)
-            .map((s) => ({
-                url: this.createProxyUrl(s.url, {}),
-                label: s.lang ?? s.language ?? 'Unknown',
-                format: 'vtt' as const
-            }));
-
-        return { sources, subtitles, diagnostics: [] };
     }
 
     // builds query params — title passed as plain string, URLSearchParams handles encoding

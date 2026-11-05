@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { knownThirdPartyProxies } from './thirdPartyProxies.js';
 import { streamPatterns } from './streamPatterns.js';
+import { registerStreamRoutes } from './streamRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,7 +23,7 @@ async function main() {
         cache: {
             type: (process.env.CACHE_TYPE as 'memory' | 'redis') ?? 'memory',
             ttl: {
-                sources: 60 * 60,
+                sources: 5 * 60,
                 subtitles: 60 * 60 * 24
             },
             redis: {
@@ -78,6 +79,7 @@ async function main() {
     // Register providers
     const registry = server.getRegistry();
     await registry.discoverProviders(path.join(__dirname, './providers/'));
+    registerStreamRoutes(server.getInstance());
 
     await server.start();
 
@@ -114,6 +116,7 @@ ${borderBottom}
 `);
 }
 
-main().catch(() => {
+main().catch((error) => {
+    console.error('[Server] Failed to start:', error);
     process.exit(1);
 });
